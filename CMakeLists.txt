@@ -4,17 +4,20 @@ set(CMAKE_CXX_STANDARD 14)
 
 add_subdirectory($ENV{BLOOM_HOME})
 
+include_directories("plog/include")
 include_directories(
-	  $ENV{SEQAN_HOME}/include 
-      $ENV{COMBBLAS_HOME}/CombBLAS/install/include
-      $ENV{COMBBLAS_HOME}/LoganGPU
+        $ENV{SEQAN_HOME}/include 
+        $ENV{COMBBLAS_HOME}/CombBLAS/install/include
+        $ENV{COMBBLAS_HOME}/ELBA/LoganGPU
+        $ENV{COMBBLAS_HOME}/ELBA/ipuma-lib/src
+        $ENV{COMBBLAS_HOME}/ELBA/ipuma-lib
 	)
 # possibly add path to boost library (not necessary on Cori, just type 'module load boost')
-add_subdirectory($ENV{COMBBLAS_HOME}/LoganGPU)
+add_subdirectory($ENV{COMBBLAS_HOME}/ELBA/LoganGPU)
 link_directories(
         $ENV{COMBBLAS_HOME}/CombBLAS/install/lib 
         $ENV{BLOOM_HOME}/build
-	    $ENV{COMBBLAS_HOME}/LoganGPU/build
+	    $ENV{COMBBLAS_HOME}/ELBA/LoganGPU/build
   )
      
 if(NOT CMAKE_BUILD_TYPE)
@@ -34,6 +37,7 @@ find_package(MPI REQUIRED)
 find_package(OpenMP REQUIRED)
 
 find_package(ZLIB)
+add_subdirectory(ipuma-lib)
 
 add_executable(elba
         src/Alphabet.cpp
@@ -86,6 +90,8 @@ add_executable(elba
         include/ContigGeneration.hpp
         include/pw/GPULoganAligner.hpp
         src/pw/GPULoganAligner.cpp
+        include/pw/IPUAligner.hpp
+        src/pw/IPUAligner.cpp
 	)
 
 # LOWER_KMER_FREQ and UPPER_KMER_FREQ based on E. coli CCS 29x (need to change for any given dataset based on error rate and depth)
@@ -106,7 +112,7 @@ set(FUZZ 1000
     CACHE STRING "Fuzz Value for Transitive Transitive Reduction")
 
 set_property(TARGET elba PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS OFF)
-set(ELBA_LINK_LIBRARY ${ELBA_LINK_LIBRARY} LOGAN_LIBRARY_static CombBLAS LIBBLOOM-NOUPC MURMURHASH)
+set(ELBA_LINK_LIBRARY ${ELBA_LINK_LIBRARY} LOGAN_LIBRARY_static CombBLAS LIBBLOOM-NOUPC MURMURHASH IPUMA_LIBRARY)
 target_link_libraries(elba PUBLIC ${ELBA_LINK_LIBRARY})
 
 target_compile_definitions(

@@ -43,6 +43,9 @@ const char *CMD_OPTION_DESCRIPTION_NO_ALIGN = "Do not perform alignment.";
 const char *CMD_OPTION_GPU_ALIGN = "ga";
 const char *CMD_OPTION_DESCRIPTION_GPU_ALIGN = "GPU-based x-drop alignment.";
 
+const char *CMD_OPTION_IPU_ALIGN = "ip";
+const char *CMD_OPTION_DESCRIPTION_IPU_ALIGN = "IPU-based x-drop alignment.";
+
 const char *CMD_OPTION_CPU_ALIGN = "ca";
 const char *CMD_OPTION_DESCRIPTION_CPU_ALIGN = "CPU-based x-drop alignment.";
 

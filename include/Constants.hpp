@@ -49,6 +49,9 @@ extern const char *CMD_OPTION_DESCRIPTION_NO_ALIGN;
 extern const char *CMD_OPTION_GPU_ALIGN;
 extern const char *CMD_OPTION_DESCRIPTION_GPU_ALIGN;
 
+extern const char *CMD_OPTION_IPU_ALIGN;
+extern const char *CMD_OPTION_DESCRIPTION_IPU_ALIGN;
+
 extern const char *CMD_OPTION_CPU_ALIGN;
 extern const char *CMD_OPTION_DESCRIPTION_CPU_ALIGN;
 

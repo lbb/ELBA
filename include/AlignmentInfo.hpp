@@ -43,4 +43,24 @@ struct LoganAlignmentInfo
   uint64_t seq_v_g_idx;
 };
 
+struct IPumaAlignmentInfo
+{
+  int xscore;
+  bool rc;
+
+  int begSeedH;
+  int begSeedV;
+  int endSeedH;
+  int endSeedV;
+
+  ushort seq_h_length;
+  ushort seq_v_length;
+  
+  ushort seq_h_seed_length;
+  ushort seq_v_seed_length;
+
+  uint64_t seq_h_g_idx;
+  uint64_t seq_v_g_idx;
+};
+
 #endif //ELBA_ALIGNMENTINFO_HPP

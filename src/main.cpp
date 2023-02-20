@@ -27,6 +27,7 @@ derivative works, and perform publicly and display publicly, and to permit other
 #include "../include/ContigGeneration.hpp"
 #include "../include/ReadOverlap.hpp"
 #include "../include/pw/GPULoganAligner.hpp"
+#include "../include/pw/IPUAligner.hpp"
 #include "../include/TransitiveReduction.hpp"
 
 #include "seqan/score/score_matrix_data.h"
@@ -87,6 +88,9 @@ bool noAlign = false;
 
 /*! Perform full alignment */
 bool gpuAlign = false;
+
+/*! Perform full alignment */
+bool ipuAlign = false;
 
 /*! Perform xdrop alignment */
 bool cpuAlign = false;
@@ -384,6 +388,8 @@ int parse_args(int argc, char **argv)
     (CMD_OPTION_NO_ALIGN, CMD_OPTION_DESCRIPTION_NO_ALIGN)
     (CMD_OPTION_GPU_ALIGN, CMD_OPTION_DESCRIPTION_GPU_ALIGN,
      cxxopts::value<int>())
+    (CMD_OPTION_IPU_ALIGN, CMD_OPTION_DESCRIPTION_IPU_ALIGN,
+     cxxopts::value<int>())
     (CMD_OPTION_CPU_ALIGN, CMD_OPTION_DESCRIPTION_CPU_ALIGN,
      cxxopts::value<int>())
     (CMD_OPTION_IDX_MAP, CMD_OPTION_DESCRIPTION_IDX_MAP,
@@ -505,6 +511,12 @@ int parse_args(int argc, char **argv)
     xdrop = result[CMD_OPTION_GPU_ALIGN].as<int>();
   }
 
+  if (result.count(CMD_OPTION_IPU_ALIGN)) {
+    ipuAlign = true;
+    noAlign  = false;
+    xdrop = result[CMD_OPTION_IPU_ALIGN].as<int>();
+  }
+
   if (result.count(CMD_OPTION_CPU_ALIGN)) {
     cpuAlign = true;
     noAlign  = false;
@@ -556,6 +568,7 @@ void pretty_print_config(std::string &append_to) {
     "alignmentlignment write frequency (--afreq)",
     "Do not perform alignment (--na)",
     "GPU alignment (--ga)",
+    "IPU alignment (--ip)",
     "CPU-based alignment (--ca)",
     "Read index map (--idxmap)",
     "Pairwise alignment alphabet (--alph)"
@@ -577,6 +590,7 @@ void pretty_print_config(std::string &append_to) {
     !myoutput.empty()     ? std::to_string(afreq) : "None",
     bool_to_str(noAlign),
     bool_to_str(gpuAlign) + (gpuAlign  ? " | X: " + std::to_string(xdrop) : ""),
+    bool_to_str(ipuAlign) + (ipuAlign  ? " | X: " + std::to_string(xdrop) : ""),
     bool_to_str(cpuAlign) + (cpuAlign  ? " | X: " + std::to_string(xdrop) : ""),
     !idx_map_file.empty() ? idx_map_file : "None",
     std::to_string(alph_t)
@@ -736,6 +750,17 @@ void PairwiseAlignment(std::shared_ptr<DistributedFastaData> dfd, PSpMat<elba::C
     
     pf = new GPULoganAligner(scoring_scheme, klength, xdrop, seed_count);	    
     dpr.run_batch(pf, proc_log_stream, log_freq, ckthr, aln_score_thr, tu, noAlign, klength, seq_count);
+	  local_alignments = static_cast<GPULoganAligner*>(pf)->nalignments;
+  }
+  else if(ipuAlign)
+  {
+    tu.print_str("IPU-based LOGAN alignment started:\n");
+    
+    std::cout << "main.cpp HERE 1" << std::endl;
+    pf = new IPUAligner(scoring_scheme, klength, xdrop, seed_count);	    
+    std::cout << "main.cpp HERE 2" << std::endl;
+    dpr.run_batch(pf, proc_log_stream, log_freq, ckthr, aln_score_thr, tu, noAlign, klength, seq_count);
+    std::cout << "main.cpp HERE 3" << std::endl;
 	  local_alignments = static_cast<GPULoganAligner*>(pf)->nalignments;
   }
   else if(cpuAlign)

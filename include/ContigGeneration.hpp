@@ -841,7 +841,7 @@ const char * ReadExchange(std::vector<IType>& LocalRead2Procs, std::unordered_ma
 
 #ifdef VERBOSE
     tu.print_str("ReadExchange :: Filled char buffers\n");
-#endif VERBOSE
+#endif
 
     MPI_Alltoallv_str(char_send, char_sendcounts, char_sdispls, char_recv, char_recvcounts, char_rdispls, di.world);
 
