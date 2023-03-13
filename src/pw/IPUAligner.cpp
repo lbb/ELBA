@@ -6,8 +6,10 @@
 #include <plog/Formatters/TxtFormatter.h>
 #include <plog/Initializers/RollingFileInitializer.h>
 #include <plog/Log.h>
+#include <string_view>
 
 uint _minOverlapLenL = 5000;
+
 
 char _complementbase(char n) {
   switch (n) {
@@ -37,6 +39,8 @@ _reversecomplement(const std::string &seq) {
 
   return cpyseq;
 }
+
+int ipu_total_cmps = 0;
 
 void IPUAligner::PostAlignDecision(const LoganAlignmentInfo &ai, bool &passed, float &ratioScoreOverlap,
                                    int &dir, int &dirT, int &sfx, int &sfxT, uint32_t &overlap, const bool noAlign, std::vector<int64_t> &ContainedSeqMyThread) {
@@ -116,7 +120,7 @@ IPUAligner::IPUAligner(
                                                      seed_count(seed_count) {
   static plog::ColorConsoleAppender<plog::TxtFormatter> consoleAppender;
   plog::init(plog::debug, &consoleAppender);
-  std::cout << "IPUAligner.cpp HERE 1" << std::endl;
+  std::cout << "Seed Length: " << seed_length << std::endl;
   const ipu::SWConfig SW_CONFIGURATION = {
       .gapInit = -1,
       .gapExtend = -1,
@@ -129,20 +133,19 @@ IPUAligner::IPUAligner(
 
   const ipu::IPUAlgoConfig ALGOCONFIG = {
       .numVertices = 1472,
-      .maxSequenceLength = 1028,
-      .maxComparisonsPerVertex = 360,
+      .maxSequenceLength = 19295,
+      .maxComparisonsPerVertex = 20,
       .vertexBufferSize = 160000,
-      .vtype = ipu::VertexType::xdropseedextend,
-      .fillAlgo = ipu::Algorithm::fillFirst,
+      .vtype = ipu::VertexType::xdroprestrictedseedextend,
+      .fillAlgo = ipu::Algorithm::greedy,
       .forwardOnly = false,
       .ioTiles = 0,
       .xDrop = xdrop,
-      .bandPercentageXDrop = 0.5,
+      .bandPercentageXDrop = 0.45,
       .seedLength = seed_length,
   };
   const auto ipus = 1;
-  this->driver_algo = new ipu::batchaffine::SWAlgorithm(SW_CONFIGURATION, ALGOCONFIG, 0, 1, ipus);
-  std::cout << "IPUAligner.cpp HERE 2" << std::endl;
+  this->driver_algo = new ipu::batchaffine::SWAlgorithm(SW_CONFIGURATION, ALGOCONFIG, 0, ipus);
 }
 
 void IPUAligner::apply(
@@ -153,15 +156,25 @@ void IPUAligner::apply(
   // ...
 }
 
-void IPUAligner::runIPUAlign(std::vector<std::string> &seqHs, std::vector<std::string> &seqVs, std::vector<std::tuple<int, int>> seeds, std::vector<int> &xscores, int xdrop, int seed_length) {
+double total_time = 0;
+void IPUAligner::runIPUAlign(const std::vector<std::string> &seqHs, const std::vector<std::string> &seqVs, std::vector<std::tuple<SeedPair, SeedPair>> seeds, std::vector<int> &xscores, int xdrop, int seed_length) {
+  ipu_total_cmps +=  seqVs.size() ;
+  
   auto npairs = seqVs.size();
   std::vector<ipu::Comparison> comparisons(npairs);
-  std::vector<std::string> sequences(npairs * 2);
+  std::vector<std::string_view> sequences(npairs * 2);
+
+  // #pragma omp parallel for
   for (int32_t i = 0; i < npairs; ++i) {
     sequences[2 * i] = seqVs[i];
     sequences[2 * i + 1] = seqHs[i];
-    int offsetH, offsetV;
-    std::tie(offsetH, offsetV) = seeds[i];
+    int offsetH1, offsetV1;
+    int offsetH2, offsetV2;
+    SeedPair s1, s2;
+    std::tie(s1, s2) = seeds[i];
+
+    std::tie(offsetH1, offsetV1) = s1;
+    std::tie(offsetH2, offsetV2) = s2;
     // if (!(seqVs[i].length() >= offsetV)) {
     //   std::cerr << "REMAP (V) len:" << seqVs[i].length() << ", offset" << offsetV << std::endl;
     // }
@@ -172,27 +185,116 @@ void IPUAligner::runIPUAlign(std::vector<std::string> &seqHs, std::vector<std::s
     assert(seqHs[i].length() >= offsetH && "HSeq offset");
     comparisons[i] = {
         2 * i, 2 * i + 1,
-        offsetV, offsetH};
+        {{{offsetV1, offsetH1}, {offsetV2, offsetH2}}}};
   }
+
+  // {
+  //   ofstream myfile;
+  //   myfile.open ("seqs_seed_H.txt");
+  //   for (auto &&i : seqHs) {
+  //     myfile << i << '\n';
+  //   }
+  //   myfile.close();
+  // }
+  // {
+  //   ofstream myfile;
+  //   myfile.open ("seqs_seed_V.txt");
+  //   for (auto &&i : seqVs) {
+  //     myfile << i << '\n';
+  //   }
+  //   myfile.close();
+  // }
+  // {
+  //   ofstream myfile;
+  //   myfile.open ("seeds_H1.txt");
+  //   for (int32_t i = 0; i < npairs; ++i) {
+  //     int offsetH1, offsetV1;
+  //     int offsetH2, offsetV2;
+  //     SeedPair s1, s2;
+  //     std::tie(s1, s2) = seeds[i];
+
+  //     std::tie(offsetH1, offsetV1) = s1;
+  //     std::tie(offsetH2, offsetV2) = s2;
+  //     myfile << offsetH1 << '\n';
+  //   }
+  //   myfile.close();
+  // }
+  // {
+  //   ofstream myfile;
+  //   myfile.open ("seeds_V1.txt");
+  //   for (int32_t i = 0; i < npairs; ++i) {
+  //     int offsetH1, offsetV1;
+  //     int offsetH2, offsetV2;
+  //     SeedPair s1, s2;
+  //     std::tie(s1, s2) = seeds[i];
+
+  //     std::tie(offsetH1, offsetV1) = s1;
+  //     std::tie(offsetH2, offsetV2) = s2;
+  //     myfile << offsetV1 << '\n';
+  //   }
+  //   myfile.close();
+  // }
+  // {
+  //   ofstream myfile;
+  //   myfile.open ("seeds_H2.txt");
+  //   for (int32_t i = 0; i < npairs; ++i) {
+  //     int offsetH1, offsetV1;
+  //     int offsetH2, offsetV2;
+  //     SeedPair s1, s2;
+  //     std::tie(s1, s2) = seeds[i];
+
+  //     std::tie(offsetH1, offsetV1) = s1;
+  //     std::tie(offsetH2, offsetV2) = s2;
+  //     myfile << offsetH2 << '\n';
+  //   }
+  //   myfile.close();
+  // }
+  // {
+  //   ofstream myfile;
+  //   myfile.open ("seeds_V2.txt");
+  //   for (int32_t i = 0; i < npairs; ++i) {
+  //     int offsetH1, offsetV1;
+  //     int offsetH2, offsetV2;
+  //     SeedPair s1, s2;
+  //     std::tie(s1, s2) = seeds[i];
+
+  //     std::tie(offsetH1, offsetV1) = s1;
+  //     std::tie(offsetH2, offsetV2) = s2;
+  //     myfile << offsetV2 << '\n';
+  //   }
+  //   myfile.close();
+  // }
+
+  // std::cerr << "maxV: " << maxV << std::endl;
+  // std::cerr << "maxSeedV: " << maxSeedV << std::endl;
+
   std::vector<ipu::Batch> batches = driver_algo->create_batches(sequences, comparisons);
+
+  auto runt = std::chrono::system_clock::now();
   std::vector<ipu::batchaffine::Job *> jobs(batches.size());
   for (size_t i = 0; i < batches.size(); i++) {
     jobs[i] = driver_algo->async_submit(&batches[i]);
   }
 
   std::vector<ipu::BlockAlignmentResults> results(batches.size());
+  // #pragma omp parallel for
   for (size_t i = 0; i < batches.size(); i++) {
     driver_algo->blocking_join(*jobs[i]);
   }
+  auto end_runt = std::chrono::system_clock::now();
+  std::cout << "Local TIMEms:::::::::::::::::  " << (ms_t(end_runt - runt)).count() << std::endl;
+  total_time += (ms_t(end_runt - runt)).count();
+  std::cout << "TIMEms:::::::::::::::::  " << total_time << std::endl;
 
-  for (size_t j = 0; j < batches.size(); j++) {
+  for (size_t i = 0; i < batches.size(); i++) {
+    int j = i;
     auto &batch = batches[j];
     ipu::BlockAlignmentResults res = batch.get_result();
     // #pragma omp for
     for (int i = 0; i < batch.origin_comparison_index.size(); ++i) {
       auto orig_i = batch.origin_comparison_index[i];
       if (orig_i >= 0) {
-        xscores[batch.origin_comparison_index[i]] = res.scores[i];
+        xscores[batch.origin_comparison_index[i]] = res.scores[i][0] > res.scores[i][1] ? res.scores[i][0] : res.scores[i][1];
       }
     }
   }
@@ -231,38 +333,26 @@ void IPUAligner::apply_batch(
   // for multiple seeds we store the seed with the highest identity
   std::vector<IPumaAlignmentInfo> ai(npairs);
 
-  std::vector<string> seqHs;
-  std::vector<string> seqVs;
-  std::vector<bool> rcs;
-  std::vector<int> xscores;
-  std::vector<std::tuple<int, int>> seeds;
 
   // bool *strands = new bool[npairs];
   // int  *xscores = new int[npairs];
   // TSeed  *seeds = new TSeed[npairs];
 
   /* GGGG: seed_count is hardcoded here (2) */
-  for (int count = 0; count < seed_count; ++count) {
+    int count_errors = 0;
+    std::vector<string> seqHs(npairs);
+    std::vector<string> seqVs(npairs);
+    std::vector<bool> rcs(npairs);
+    std::vector<int> xscores(npairs);
+    std::vector<std::tuple<SeedPair, SeedPair>> seeds(npairs);
     auto start_time = std::chrono::system_clock::now();
+    int skipps = 0;
 
-    // @GGGG: keep the order for the post alignment evaluation (measure slowdown)
-    // #pragma omp parallel for
-    for (uint64_t i = 0; i < npairs; ++i)  // I acculate sequences for GPU batch alignment
-    {
-      // init result
-      //       LoganResult localRes;
-      bool rc;
-
-      // Get seed location
-      // std::cout << "IPUAligner.cpp seed0" << std::endl;
+    for (uint64_t i = 0; i < npairs; ++i) {
       elba::CommonKmers *cks = std::get<2>(mattuples[lids[i]]);
-      // std::cout << "IPUAligner.cpp seed1" << std::endl;
-
-      // In KmerIntersectSR.hpp we have (where res == cks):
-      // 	res.first.first 	// Kmer 1 on argA
-      // 	res.first.second 	// Kmer 1 on argB
-      // 	res.second.first 	// Kmer 2 on argA
-      // 	res.second.second 	// Kmer 2 on argB
+      bool rc = false;
+      std::array<SeedPair, 2> tmpSeeds;
+      for (int count = 0; count < seed_count; ++count) {
 
       // argA (see KmerIntersectSR.hpp) == row == seqV
       ushort LocalSeedVOffset = (count == 0) ? cks->first.first : cks->second.first;
@@ -288,81 +378,61 @@ void IPUAligner::apply_batch(
       std::string seedV = seqV.substr(LocalSeedVOffset, seed_length);
 
       std::string twinH = _reversecomplement(seedH);
-      // std::cout << "IPUAligner.cpp seed2" << std::endl;
 
-      // xscores.push_back(0);
       if (twinH == seedV) {
         std::string twinseqH(seqH);
-
         std::reverse(std::begin(twinseqH), std::end(twinseqH));
         std::transform(std::begin(twinseqH), std::end(twinseqH), std::begin(twinseqH), _complementbase);
-        // std::cout << "IPUAligner.cpp seed4.1" << std::endl;
-
         LocalSeedHOffset = twinseqH.length() - LocalSeedHOffset - seed_length;
         assert(LocalSeedHOffset >= 0);
-        // std::cout << "IPUAligner.cpp seed5.1" << std::endl;
-
         assert(LocalSeedHOffset <= twinseqH.length());
         assert(LocalSeedVOffset <= seqV.length());
-        // if (!(seqV.length() >= LocalSeedVOffset)) {
-        //   std::cerr << "ORIG (V) len:" << seqV.length() << ", offset" << LocalSeedVOffset << std::endl;
-        // }
-        // if (!(twinseqH.length() >= LocalSeedHOffset)) {
-        //   std::cerr << "ORIG (H) len:" << twinseqH.length() << ", offset" << LocalSeedHOffset << std::endl;
-        // }
-        // GGGG: here only accumulate stuff for the GPUs, don't perform alignment
-        seeds.push_back({LocalSeedHOffset, LocalSeedVOffset});  // segfault origin might be around here
-        // std::cout << "IPUAligner.cpp seed5.2" << std::endl;
-        seqVs.push_back(seqV);
-        // std::cout << "IPUAligner.cpp seed5.3" << std::endl;
-        seqHs.push_back(twinseqH);
-        // std::cout << "IPUAligner.cpp seed5.4" << std::endl;
-        rc = true;
-        rcs.push_back(rc);
-        xscores.push_back(0);
-        // std::cout << "IPUAligner.cpp seed5.5" << std::endl;
-
-        // xscores.push_back({rc, });
+        if (count == 0) {
+          rc = true;
+          seqVs[i] = seqV;
+          seqHs[i] = twinseqH;
+          rcs[i] = rc;
+          tmpSeeds[count] = {LocalSeedHOffset, LocalSeedVOffset};
+        } else {
+          if (rc != true) {
+            tmpSeeds[count] = {-1, -1};
+            count_errors++;
+          }
+          tmpSeeds[count] = {LocalSeedHOffset, LocalSeedVOffset};
+        }
       } else if (seedH == seedV) {
-        // std::cout << "IPUAligner.cpp seed3.2" << std::endl;
-        // SeedInterface seed(LocalSeedHOffset, LocalSeedVOffset, seed_length);  // LocalSeedHOffset + , LocalSeedVOffset + seed_length);
-
-        // GGGG: here only accumulate stuff for the GPUs, don't perform alignment
         assert(LocalSeedHOffset <= seqH.length());
         assert(LocalSeedVOffset <= seqV.length());
-        // if (!(seqV.length() >= LocalSeedVOffset)) {
-        //   std::cerr << "ORIG (V) len:" << seqV.length() << ", offset" << LocalSeedVOffset << std::endl;
-        // }
-        // if (!(seqH.length() >= LocalSeedHOffset)) {
-        //   std::cerr << "ORIG (H) len:" << seqV.length() << ", offset" << LocalSeedHOffset << std::endl;
-        // }
-        seeds.push_back({LocalSeedHOffset, LocalSeedVOffset});  // segfault origin might be around here (?)
-        seqHs.push_back(seqH);
-        seqVs.push_back(seqV);
-        rc = false;
-        rcs.push_back(rc);
-        xscores.push_back(0);
-
-        // xscores.push_back(localRes);
+        if (count == 0) {
+          rc = false;
+          seqVs[i] = seqV;
+          seqHs[i] = seqH;
+          rcs[i] = rc;
+          tmpSeeds[count] = {LocalSeedHOffset, LocalSeedVOffset};
+        } else {
+          if (rc != false) {
+            tmpSeeds[count] = {-1, -1};
+            count_errors++;
+          }
+          tmpSeeds[count] = {LocalSeedHOffset, LocalSeedVOffset};
+        }
       } else {
-        // std::cout << "No seed match" << std::endl;
+        tmpSeeds[count] = {-1, -1};
+        skipps++;
       }
-      // std::cout << "IPUAligner.cpp seed5.6" << std::endl;
-      // std::cout << "IPUAligner.cpp seed6" << std::endl;
     }
+    seeds[i] = {tmpSeeds[0], tmpSeeds[1]};
+  }
 
     auto end_time = std::chrono::system_clock::now();
     add_time("XA:LoganPreprocess", (ms_t(end_time - start_time)).count());
 
     start_time = std::chrono::system_clock::now();
 
-    // Call LOGAN only if noAlign is false
-    if (!noAlign) {
-      //			if(count == 0)
-      //				std::cout << " - 1st k-mer comparison started on ";
-      //			else
-      //				std::cout << " - 2nd k-mer comparison started on ";
+    std::cout << "Skipped: " <<  skipps << std::endl;
+    std::cout << "FLIP ERRORS: " << count_errors << std::endl;
 
+    if (!noAlign) {
       this->runIPUAlign(seqHs, seqVs, seeds, xscores, xdrop, seed_length);
     } else {
       std::cout << "What are we doing?" << std::endl;
@@ -376,8 +446,10 @@ void IPUAligner::apply_batch(
 
     start_time = std::chrono::system_clock::now();
 
-    Compute stats
-    if (count == 0)  /*overwrite in the first seed*/ {
+    // Compute stats
+    /*
+    if (count == 0)  //overwrite in the first seed
+    {
       for (uint64_t i = 0; i < npairs; ++i) {
         ai[i].xscore = xscores[i];
         ai[i].rc = rcs[i];
@@ -419,12 +491,15 @@ void IPUAligner::apply_batch(
     		}
     	}
     }
+    
+    
+    
+    */
 
     end_time = std::chrono::system_clock::now();
     add_time("XA:ComputeStats", (ms_t(end_time - start_time)).count());
-  }
 
-  auto start_time = std::chrono::system_clock::now();
+   start_time = std::chrono::system_clock::now();
   std::vector<std::vector<int64_t>> ContainedSeqPerThread(numThreads);
 
   // Dump alignment info
@@ -475,9 +550,9 @@ void IPUAligner::apply_batch(
     readssofar += ContainedSeqPerThread[t].size();
   }
 
-  auto end_time = std::chrono::system_clock::now();
+   end_time = std::chrono::system_clock::now();
   add_time("XA:StringOp", (ms_t(end_time - start_time)).count());
-
+	std::cout << "total_cmps=" << ipu_total_cmps << std::endl;
 
   // std::cout << "IPUAligner.cpp EXIT" << std::endl;
   return;

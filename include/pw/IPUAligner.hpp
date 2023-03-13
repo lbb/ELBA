@@ -6,6 +6,9 @@
 #include "../../ipuma-lib/src/swatlib/vector.hpp"
 #include "../AlignmentInfo.hpp"
 #include "PairwiseFunction.hpp"
+#include <string_view>
+
+typedef std::tuple<int, int> SeedPair;
 
 // template <typename TSequenceValue, typename TSpec>
 class IPUAligner : public PairwiseFunction {
@@ -38,12 +41,13 @@ class IPUAligner : public PairwiseFunction {
               std::vector<int64_t> &ContainedSeqPerThread,
               float ratioScoreOverlap = 0.99,  // GGGG: Precomputed for error rate = 15% and default scoring matrix (1,-1,-1) (0.445 for CLR, 0.99 for CCS)
               int debugThr = 50) override;     // GGGG: Fixed threshold, this is convenient only for debugging
-  void runIPUAlign(std::vector<std::string> &seqHs, 
-  std::vector<std::string> &seqVs, 
-  std::vector<std::tuple<int, int>> seeds, 
-  std::vector<int> &xscores, 
-  int xdrop, 
-  int seed_length);
+  void runIPUAlign(
+      const std::vector<std::string> &seqHs, 
+      const std::vector<std::string> &seqVs, 
+      std::vector<std::tuple<SeedPair, SeedPair>> seeds, 
+      std::vector<int> &xscores, 
+      int xdrop, 
+      int seed_length);
 
  private:
   ipu::batchaffine::SWAlgorithm *driver_algo = nullptr;

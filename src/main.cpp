@@ -758,6 +758,7 @@ void PairwiseAlignment(std::shared_ptr<DistributedFastaData> dfd, PSpMat<elba::C
     
     std::cout << "main.cpp HERE 1" << std::endl;
     pf = new IPUAligner(scoring_scheme, klength, xdrop, seed_count);	    
+    tp->times["StartMain:DprAlign()"] = std::chrono::system_clock::now();
     std::cout << "main.cpp HERE 2" << std::endl;
     dpr.run_batch(pf, proc_log_stream, log_freq, ckthr, aln_score_thr, tu, noAlign, klength, seq_count);
     std::cout << "main.cpp HERE 3" << std::endl;

@@ -104,6 +104,7 @@ void SeedExtendXdrop::apply(
     // ...
 }
 
+auto total_cmps = 0;
 // @NOTE This is hard-coded to the number of seeds being <= 2
 void
 SeedExtendXdrop::apply_batch
@@ -121,9 +122,9 @@ SeedExtendXdrop::apply_batch
 	std::vector<int64_t>& ContainedSeqPerBatch,
     float ratioScoreOverlap, // GGGG: this is my ratioScoreOverlap variable change name later
     int debugThr
-)
-{
+) {
 	seqan::ExecutionPolicy<seqan::Parallel, seqan::Vectorial> exec_policy;
+
 
 	int numThreads = 1;
 	#ifdef THREADED
@@ -146,6 +147,8 @@ SeedExtendXdrop::apply_batch
 	int  *xscores = new int[npairs];
 	TSeed  *seeds = new TSeed[npairs];
 
+      	auto runt = std::chrono::system_clock::now();
+
 	/* GGGG: seed_count is hardcoded here (2) */
 	for(int count = 0; count < seed_count; ++count)
 	{
@@ -158,8 +161,7 @@ SeedExtendXdrop::apply_batch
 
 	// extend the current seed and form a new gaps object
 	#pragma omp parallel for
-		for (uint64_t i = 0; i < npairs; ++i)
-		{
+		for (uint64_t i = 0; i < npairs; ++i) {
 			elba::CommonKmers *cks = std::get<2>(mattuples[lids[i]]);
 
 			// In KmerIntersectSR.hpp we have (where res == cks):
@@ -204,6 +206,10 @@ SeedExtendXdrop::apply_batch
 				{
 					/* Perform match extension */
 					start_time = std::chrono::system_clock::now();
+					// #pragma omp critical
+					// {
+					// 	total_cmps ++;
+					// }
 					xscores[i] = extendSeed(seed, twinRead, seqsv[i], seqan::EXTEND_BOTH, scoring_scheme,
 							xdrop, (int)k,
 							seqan::GappedXDrop());
@@ -223,6 +229,10 @@ SeedExtendXdrop::apply_batch
 				if(!noAlign)
 				{
 					start_time = std::chrono::system_clock::now();
+					// #pragma omp critical
+					// {
+					// 	total_cmps ++;
+					// }
 					xscores[i] = extendSeed(seed, seqsh[i], seqsv[i], seqan::EXTEND_BOTH, scoring_scheme,
 							xdrop, (int)k,
 							seqan::GappedXDrop());
@@ -291,6 +301,9 @@ SeedExtendXdrop::apply_batch
     	add_time("XA:ComputeStats", (ms_t(end_time - start_time)).count());
 	}
 
+      	auto end_runt = std::chrono::system_clock::now();
+      	std::cout << "TIMEms:::::::::::::::::  " << (ms_t(end_runt - runt)).count() << std::endl;
+
 	delete [] seedlens;
 	delete [] xscores;
 	delete [] strands;
@@ -357,6 +370,7 @@ SeedExtendXdrop::apply_batch
 
 	auto end_time = std::chrono::system_clock::now();
   	add_time("XA:StringOp", (ms_t(end_time - start_time)).count());
+	std::cout << "total_cmps=" << total_cmps << std::endl;
 
 	delete [] ai;
 

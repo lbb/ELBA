@@ -215,7 +215,7 @@ DistributedPairwiseRunner::run_batch
 	int myrank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 
-	int			batch_size		= 1e5;
+	int			batch_size		= 1e6;
 	int			batch_cnt		= (local_nnz_count / batch_size) + 1;
 	int			batch_idx		= 0;
 	uint64_t	nalignments		= 0;
@@ -331,17 +331,26 @@ DistributedPairwiseRunner::run_batch
 
 		uint64_t *lids = new uint64_t[algn_cnts[numThreads]];
 		
+  		// std::ofstream matfile;
+  		// matfile.open ("mat.txt", ios::app);
+  		// std::ofstream valfile;
+  		// valfile.open ("val.txt", ios::app);
+
 		// fill StringSet
-		#pragma omp parallel
+		// #pragma omp parallel
 		{
 			int tid = 0;
 			#ifdef THREADED
-			tid = omp_get_thread_num();
+			// tid = omp_get_thread_num();
 			#endif
 
 			uint64_t algn_idx = algn_cnts[tid];
+			int last_l_col_idx = 0;
+			int last_l_row_idx = 0;
+			auto lastcounts = 0;
+			auto totalcounts = 0;
 
-			#pragma omp for schedule(static, 1000)
+			// #pragma omp for schedule(static, 1000)
 			for (uint64_t i = beg; i < end; ++i)
 			{
 				auto		l_row_idx = std::get<0>(mattuples[i]);
@@ -355,15 +364,40 @@ DistributedPairwiseRunner::run_batch
 
 				if ((cks->count >= ckthr) && (l_col_idx >= l_row_idx) && (l_col_idx != l_row_idx  || g_col_idx > g_row_idx))
 				{
-
 					seqsh[algn_idx] = seqan::Dna5String(*(dfd->col_seq(l_col_idx)));
 					seqsv[algn_idx] = seqan::Dna5String(*(dfd->row_seq(l_row_idx)));
 
+					bool reuse = false;
+					if (last_l_col_idx == l_col_idx) {
+						std::cout << "COLIDX: " << l_col_idx << std::endl;
+						lastcounts++;
+						reuse = true;
+					}
+					if (last_l_row_idx == l_row_idx) {
+						std::cout << "ROWIDX: " << l_col_idx << std::endl;
+						lastcounts++;
+						reuse = true;
+					}
+					totalcounts++;
+
+					last_l_col_idx = l_col_idx;
+					last_l_row_idx = l_row_idx;
+					// #pragma omp critical
+					// {
+					// 	matfile << l_col_idx << " " << l_row_idx << '\n';
+					// 	valfile << l_col_idx << " " << length(seqsh[algn_idx]) << '\n';
+					// 	valfile << l_row_idx << " " << length(seqsv[algn_idx]) << '\n';
+
+					// }
 					lids[algn_idx] = i;
 					++algn_idx;
 				}
 			}
+			std::cout << ((double) lastcounts/totalcounts) << std::endl;
 		}
+		// matfile.close();
+  		// valfile.close();
+
 
 		// function call to the aligner
 		lfs << "calling aligner for batch idx " << batch_idx
