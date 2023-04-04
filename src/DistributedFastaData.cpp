@@ -60,6 +60,10 @@ DistributedFastaData::DistributedFastaData(
 
   tp->times["EndDfd:PfrReadFasta()"] = std::chrono::system_clock::now();
 
+  if (buff == NULL) {
+    std::cout << "buf is null" << std::endl;
+  }
+
   tp->times["StartDfd:newFD()"] = tp->times["EndDfd:PfrReadFasta()"];
   fd = new FastaData(buff, k, l_start, l_end, tp, tu);
   l_seq_count = fd->local_count();

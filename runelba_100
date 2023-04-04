@@ -1,0 +1,152 @@
+#!/bin/bash
+#SBATCH -p ipuq    # partition (queue)
+#SBATCH -N 1 # number of nodes
+#SBATCH -n 81 # number of cores
+#SBATCH -t 1-1:00 # time (D-HH:MM)
+#  #SBATCH --exclusive
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=luk@simula.no
+#SBATCH -o slurm.%N.%j.log # STDOUT
+
+# #SBATCH -p dgx2q    # partition (queue)
+# #SBATCH -N 1 # number of nodes
+# # #SBATCH --sockets-per-node 1 # number of cores
+# # #SBATCH --cores-per-socket 64
+# # #SBATCH --ntasks-per-node=128
+# # #SBATCH --cores-per-socket 10
+# # #SBATCH --ntasks-per-node=20
+# #SBATCH -n 16 # number of cores
+# #SBATCH -t 1-1:00 # time (D-HH:MM)
+# #SBATCH --gres=gpu:1
+# #SBATCH -o slurm.%N.%j.out # STDOUT
+# #SBATCH -e slurm.%N.%j.err # STDERR
+
+
+
+# #SBATCH -p habanaq    # partition (queue)
+# #SBATCH -N 1 # number of nodes
+# #SBATCH --sockets-per-node 1 # number of cores
+# #SBATCH --cores-per-socket 36
+# #SBATCH --ntasks-per-node=72
+# #SBATCH -t 1-1:00 # time (D-HH:MM)
+# #  #SBATCH --exclusive
+# #SBATCH --mail-type=ALL
+# #SBATCH --mail-user=luk@simula.no
+# #SBATCH -o slurm.%N.%j.out # STDOUT
+# #SBATCH -e slurm.%N.%j.err # STDERR
+
+
+
+
+
+
+ulimit -s 10240
+mkdir -p ~/output/ipuq
+
+module purge
+
+pushd ../
+source env.source
+popd
+
+export OMPI_MCA_opal_common_ucx_opal_mem_hooks=1
+export OMPI_MCA_pml_ucx_verbose=100
+export OMPI_MCA_btl_openib_warn_no_device_params_found=1
+export OMPI_MCA_btl_openib_allow_ib=1
+export OMPI_MCA_pml="^ucx"
+export OMPI_MCA_btl_openib_if_include="mlx5_4:1"
+export OMPI_MCA_btl=openib,self
+export OMPI_MCA_btl_tcp_if_exclude=lo,dis0,eno1,eno2,enp113s0f0,ib0,ib1,enp33s0f0,enp33s0f1
+
+
+# Command
+
+
+
+ds=`pwd`/../data/portal.nersc.gov/project/m1982/bella/celegans40x.fa
+# IPU
+pushd build_release
+export OMP_NUM_THREADS=81
+export OMP_DISPLAY_ENV=true
+
+for n in 4 8 16 32; do
+
+export NIPUS=${n}
+
+# echo "============================================================================================================="
+# echo "IPU XDROP 10"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}"  -k 31 --idxmap elba-test -c 91394 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ip 10
+
+echo "============================================================================================================="
+echo "IPU XDROP 15"
+echo "============================================================================================================="
+srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+	./elba -i "${ds}" -k 31 --idxmap elba-test -c 91394 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ip 15
+
+# echo "============================================================================================================="
+# echo "IPU XDROP 20"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}"  -k 31 --idxmap elba-test -c 91394 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ip 20
+
+
+# echo "============================================================================================================="
+# echo "GPU XDROP 10"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}"  -k 17 --idxmap elba-test -c 135 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ga 10
+
+# echo "============================================================================================================="
+# echo "GPU XDROP 15"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}" -k 17 --idxmap elba-test -c 135 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ga 15
+
+# echo "============================================================================================================="
+# echo "GPU XDROP 30"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}" -k 17 --idxmap elba-test -c 135 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ga 30
+
+# echo "============================================================================================================="
+# echo "GPU XDROP 50"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}" -k 17 --idxmap elba-test -c 135 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ga 50
+
+# export OMP_PROC_BIND=true
+# echo "============================================================================================================="
+# echo "CPU XDROP 10"
+# echo "============================================================================================================="
+# echo "$(nproc)"
+# srun --mpi=pmi2 -n $(( 2 * $SLURM_NTASKS )) --ntasks 1 -- \
+# 	./elba -i "${ds}" -k 31 --idxmap elba-test -c 135 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ca 10
+
+# echo "============================================================================================================="
+# echo "CPU XDROP 15"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}" -k 31 --idxmap elba-test -c 135 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ca 15
+
+# echo "============================================================================================================="
+# echo "CPU XDROP 20"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}" -k 31 --idxmap elba-test -c 135 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ca 20
+
+# echo "============================================================================================================="
+# echo "CPU XDROP 50"
+# echo "============================================================================================================="
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+# 	./elba -i "${ds}" -k 17 --idxmap elba-test -c 135 --alph dna --of overlap-test --af alignment-test -s 1 -O 100000 --afreq 100000 --ca 50
+
+# mpiexec -n 10 -np 1 -- \
+
+
+# CPU
+# srun --mpi=pmi2 -n $SLURM_NTASKS --ntasks 1 -- \
+#	./pastis -i /global/D1/projects/ipumer/datasets/metaclust/metaclust50_500K.fasta -c 500000 --af sim_mat_cpu500k.mtx --ckthr 1 --sfa
+
+done

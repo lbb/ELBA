@@ -215,7 +215,7 @@ DistributedPairwiseRunner::run_batch
 	int myrank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 
-	int			batch_size		= 1e6;
+	int			batch_size		= 1e8;
 	int			batch_cnt		= (local_nnz_count / batch_size) + 1;
 	int			batch_idx		= 0;
 	uint64_t	nalignments		= 0;
@@ -329,6 +329,12 @@ DistributedPairwiseRunner::run_batch
 		resize(seqsh, algn_cnts[numThreads], seqan::Exact{});
 		resize(seqsv, algn_cnts[numThreads], seqan::Exact{});
 
+		std::vector<int> seqsh_idx(algn_cnts[numThreads]);
+		std::vector<int> seqsv_idx(algn_cnts[numThreads]);
+		
+		// std::vector<int> seqsh_idx;
+		// std::vector<int> seqsv_idx;
+
 		uint64_t *lids = new uint64_t[algn_cnts[numThreads]];
 		
   		// std::ofstream matfile;
@@ -336,21 +342,21 @@ DistributedPairwiseRunner::run_batch
   		// std::ofstream valfile;
   		// valfile.open ("val.txt", ios::app);
 
+		const bool pairwiseinput = false;
+
+		printf("IN DISTRIBUTED Runner npairs %d\n", end - beg);
+		printf("IN DISTRIBUTED Runner nalignments %d\n", nalignments);
 		// fill StringSet
-		// #pragma omp parallel
+		#pragma omp parallel
 		{
 			int tid = 0;
 			#ifdef THREADED
-			// tid = omp_get_thread_num();
+			tid = omp_get_thread_num();
 			#endif
 
 			uint64_t algn_idx = algn_cnts[tid];
-			int last_l_col_idx = 0;
-			int last_l_row_idx = 0;
-			auto lastcounts = 0;
-			auto totalcounts = 0;
 
-			// #pragma omp for schedule(static, 1000)
+			#pragma omp for schedule(static, 1000)
 			for (uint64_t i = beg; i < end; ++i)
 			{
 				auto		l_row_idx = std::get<0>(mattuples[i]);
@@ -364,24 +370,13 @@ DistributedPairwiseRunner::run_batch
 
 				if ((cks->count >= ckthr) && (l_col_idx >= l_row_idx) && (l_col_idx != l_row_idx  || g_col_idx > g_row_idx))
 				{
-					seqsh[algn_idx] = seqan::Dna5String(*(dfd->col_seq(l_col_idx)));
-					seqsv[algn_idx] = seqan::Dna5String(*(dfd->row_seq(l_row_idx)));
-
-					bool reuse = false;
-					if (last_l_col_idx == l_col_idx) {
-						std::cout << "COLIDX: " << l_col_idx << std::endl;
-						lastcounts++;
-						reuse = true;
+					if (pairwiseinput) {
+						seqsh[algn_idx] = seqan::Dna5String(*(dfd->col_seq(l_col_idx)));
+						seqsv[algn_idx] = seqan::Dna5String(*(dfd->row_seq(l_row_idx)));
 					}
-					if (last_l_row_idx == l_row_idx) {
-						std::cout << "ROWIDX: " << l_col_idx << std::endl;
-						lastcounts++;
-						reuse = true;
-					}
-					totalcounts++;
+					seqsh_idx[algn_idx] = l_col_idx;
+					seqsv_idx[algn_idx] = l_row_idx;
 
-					last_l_col_idx = l_col_idx;
-					last_l_row_idx = l_row_idx;
 					// #pragma omp critical
 					// {
 					// 	matfile << l_col_idx << " " << l_row_idx << '\n';
@@ -393,7 +388,6 @@ DistributedPairwiseRunner::run_batch
 					++algn_idx;
 				}
 			}
-			std::cout << ((double) lastcounts/totalcounts) << std::endl;
 		}
 		// matfile.close();
   		// valfile.close();
@@ -406,11 +400,25 @@ DistributedPairwiseRunner::run_batch
 			<< std::endl;
 
 		// GGGG: fill ContainedSeqPerBatch
-		pf->apply_batch(seqsh, seqsv, lids, col_offset, row_offset, mattuples, lfs, noAlign, k, nreads, ContainedSeqPerBatch[batch_idx]);
+		if (pairwiseinput) {
+		pf->apply_batch(
+			seqsh, seqsv,
+			lids, col_offset, row_offset, mattuples, lfs, noAlign, k, nreads, ContainedSeqPerBatch[batch_idx]);
+
+		} else {
+		pf->apply_batch(
+			seqsh_idx, seqsv_idx,
+			dfd->col_seqs, dfd->row_seqs,
+			seqsh, seqsv,
+			lids, col_offset, row_offset, mattuples, lfs, noAlign, k, nreads, ContainedSeqPerBatch[batch_idx]);
+
+		}
+		std::cout << "HAAAAAAAAAAAAAAAAAAAAAA" << std::endl;
 		
 		delete [] lids;
 		++batch_idx;
 	}
+		std::cout << "BBBBBBBBBBBBBBBBBBBBBBBBBBB" << std::endl;
 
 	// lfs << "Before concatenation ContainedSeqPerBatch" << std::endl;
 	

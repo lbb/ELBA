@@ -9,6 +9,7 @@
 #include <string_view>
 
 typedef std::tuple<int, int> SeedPair;
+typedef std::vector<std::array<std::vector<std::tuple<int, int, int>>, 2>> ColPacks;
 
 // template <typename TSequenceValue, typename TSpec>
 class IPUAligner : public PairwiseFunction {
@@ -28,7 +29,8 @@ class IPUAligner : public PairwiseFunction {
         elba::CommonKmers &cks, std::stringstream &ss) override;
 
   void
-  apply_batch(seqan::StringSet<seqan::Dna5String> &seqsh,
+  apply_batch(
+             seqan::StringSet<seqan::Dna5String> &seqsh,
               seqan::StringSet<seqan::Dna5String> &seqsv,
               uint64_t *lids,
               uint64_t col_offset,
@@ -41,15 +43,53 @@ class IPUAligner : public PairwiseFunction {
               std::vector<int64_t> &ContainedSeqPerThread,
               float ratioScoreOverlap = 0.99,  // GGGG: Precomputed for error rate = 15% and default scoring matrix (1,-1,-1) (0.445 for CLR, 0.99 for CCS)
               int debugThr = 50) override;     // GGGG: Fixed threshold, this is convenient only for debugging
+
+  void
+  apply_batch(
+             std::vector<int> &seqsh_idx,
+             std::vector<int> &seqsv_idx,
+             std::vector<seqan::Dna5String*> &seqs_db_h,
+             std::vector<seqan::Dna5String*> &seqs_db_v,
+             seqan::StringSet<seqan::Dna5String> &seqsh,
+             seqan::StringSet<seqan::Dna5String> &seqsv,
+              uint64_t *lids,
+              uint64_t col_offset,
+              uint64_t row_offset,
+              PSpMat<elba::CommonKmers>::ref_tuples *mattuples,
+              std::ofstream &lfs,
+              const bool noAlign,
+              ushort k,
+              uint64_t nreads,
+              std::vector<int64_t> &ContainedSeqPerThread,
+              float ratioScoreOverlap = 0.99,  // GGGG: Precomputed for error rate = 15% and default scoring matrix (1,-1,-1) (0.445 for CLR, 0.99 for CCS)
+              int debugThr = 50) override;     // GGGG: Fixed threshold, this is convenient only for debugging
+   // GGGG: Fixed threshold, this is convenient only for debugging
+
   void runIPUAlign(
+      ColPacks &columnpacks,
+      const std::vector<int> &seqHs_idx, 
+      const std::vector<int> &seqVs_idx, 
+      const std::vector<std::string> &sequences,
       const std::vector<std::string> &seqHs, 
       const std::vector<std::string> &seqVs, 
       std::vector<std::tuple<SeedPair, SeedPair>> seeds, 
       std::vector<int> &xscores, 
       int xdrop, 
       int seed_length);
+              
+  void runIPUAlign(
+      ColPacks &columnpacks,
+      const std::vector<int> &seqHs_idx, 
+      const std::vector<int> &seqVs_idx, 
+      const std::vector<std::string> &sequences,
+      std::vector<std::tuple<SeedPair, SeedPair>> seeds, 
+      std::vector<int> &xscores, 
+      int xdrop, 
+      int seed_length);
 
  private:
+   ipu::IPUAlgoConfig ALGOCONFIG;
+   ipu::SWConfig SW_CONFIGURATION;
   ipu::batchaffine::SWAlgorithm *driver_algo = nullptr;
   ScoringScheme scoring_scheme;
   ushort seed_length;

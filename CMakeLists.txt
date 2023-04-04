@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.11)
 project(elba LANGUAGES C CXX CUDA)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 add_subdirectory($ENV{BLOOM_HOME})
 
@@ -95,11 +95,27 @@ add_executable(elba
 	)
 
 # LOWER_KMER_FREQ and UPPER_KMER_FREQ based on E. coli CCS 29x (need to change for any given dataset based on error rate and depth)
-set(LOWER_KMER_FREQ 20
+# set(LOWER_KMER_FREQ 20
+#     CACHE STRING "Lower Bound for the K-mer Frequency")
+
+# set(UPPER_KMER_FREQ 30
+#     CACHE STRING "Upper Bound for the K-mer Frequency")
+
+# ecoli100x.fa
+set(LOWER_KMER_FREQ 268
     CACHE STRING "Lower Bound for the K-mer Frequency")
 
-set(UPPER_KMER_FREQ 30
+set(UPPER_KMER_FREQ 294
     CACHE STRING "Upper Bound for the K-mer Frequency")
+
+# set(VERBOSE 1)
+
+# celegans_hifi_sim
+# set(LOWER_KMER_FREQ 31
+#     CACHE STRING "Lower Bound for the K-mer Frequency")
+
+# set(UPPER_KMER_FREQ 40
+#     CACHE STRING "Upper Bound for the K-mer Frequency")
     
 set(MAX_KMER_SIZE 32
     CACHE STRING "Longest K-mer Length")
@@ -110,6 +126,7 @@ set(DELTACHERNOFF 0.1
     
 set(FUZZ 1000
     CACHE STRING "Fuzz Value for Transitive Transitive Reduction")
+
 
 set_property(TARGET elba PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS OFF)
 set(ELBA_LINK_LIBRARY ${ELBA_LINK_LIBRARY} LOGAN_LIBRARY_static CombBLAS LIBBLOOM-NOUPC MURMURHASH IPUMA_LIBRARY)

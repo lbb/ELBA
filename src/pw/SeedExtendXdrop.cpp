@@ -313,6 +313,7 @@ SeedExtendXdrop::apply_batch
 
 	std::vector<std::vector<int64_t>> ContainedSeqPerThread(numThreads);
 
+      	auto post_t = std::chrono::system_clock::now();
 	// TODO@GGGG: reproduce and fix segfault
 	// for(int t = 0; t < numThreads; t++)
 	// 	ContainedSeqPerThread[t].resize(std::ceil(nreads/numThreads));
@@ -351,6 +352,8 @@ SeedExtendXdrop::apply_batch
 			}
 		}
 	}
+      	auto end_post = std::chrono::system_clock::now();
+      	std::cout << "POST TIMEms:::::::::::::::::  " << (ms_t(end_post - post_t)).count() << std::endl;
 
 	int readcount = 0;
 	for(int t = 0; t < numThreads; ++t)

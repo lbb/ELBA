@@ -44,6 +44,29 @@ public:
          float ratioScoreOverlap = 0.99,     // GGGG: Precomputed for error rate = 15% and default scoring matrix (1,-1,-1) (0.445 for CLR, 0.99 for CCS)
 			   int debugThr = 50) = 0;            // GGGG: Fixed threshold, this is convenient only for debugging
 
+  virtual
+  void
+  apply_batch (
+         std::vector<int> &seqsh_idx,
+			   std::vector<int> &seqsv_idx,
+         std::vector<seqan::Dna5String*> &seqs_db_h,
+         std::vector<seqan::Dna5String*> &seqs_db_v,
+         seqan::StringSet<seqan::Dna5String> &seqsh,
+			   seqan::StringSet<seqan::Dna5String> &seqsv,
+			   uint64_t *lids,
+			   uint64_t col_offset,
+			   uint64_t row_offset,
+			   PSpMat<elba::CommonKmers>::ref_tuples *mattuples,
+         std::ofstream &lfs,
+         const bool noAlign,
+         ushort k,
+         uint64_t nreads,
+         std::vector<int64_t>& ContainedSeqPerProc,
+         float ratioScoreOverlap = 0.99,     // GGGG: Precomputed for error rate = 15% and default scoring matrix (1,-1,-1) (0.445 for CLR, 0.99 for CCS)
+			   int debugThr = 50) {
+          apply_batch(seqsh, seqsv, lids, col_offset, row_offset, mattuples, lfs, noAlign, k, nreads, ContainedSeqPerProc, ratioScoreOverlap, debugThr);
+         };            // GGGG: Fixed threshold, this is convenient only for debugging
+
 
   void add_time(std::string type, double duration);
   void print_avg_times(std::shared_ptr<ParallelOps> parops, std::ofstream &lfs);
